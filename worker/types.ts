@@ -7,10 +7,20 @@ export interface Env {
   ENVIRONMENT?: string
   CF_ACCESS_TEAM_DOMAIN?: string
   CF_ACCESS_AUD?: string
+  MEMBER_JWT_SECRET?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   RESEND_API_KEY?: string
   ORDER_EMAIL_FROM?: string
+  EMAIL?: {
+    send(message: {
+      to: string
+      from: string
+      subject: string
+      html?: string
+      text?: string
+    }): Promise<{ messageId?: string }>
+  }
 }
 
 export type AccessIdentity = {

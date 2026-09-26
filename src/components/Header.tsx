@@ -38,7 +38,7 @@ export function Header() {
           FLEUR LUMIÈRE
         </Link>
         <div className="header__right">
-          <Link to="/about" aria-label="ブランド">
+          <Link to="/login" className="header__account" aria-label="会員登録 / ログイン">
             <IconUser />
           </Link>
           <button type="button" className="bag-btn" aria-label="カート" onClick={openCart}>

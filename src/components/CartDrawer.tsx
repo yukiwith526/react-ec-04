@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FREE_SHIPPING_THRESHOLD } from '../data/storefront'
 import { useCart } from '../context/CartContext'
@@ -14,6 +15,7 @@ export function CartDrawer() {
   const progress = Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD) * 100)
   const inCart = new Set(items.map((item) => item.productId))
   const upsells = products.filter((product) => !inCart.has(product.id) && product.stock > 0).slice(0, 2)
+  const [hideUpsell, setHideUpsell] = useState(false)
 
   return (
     <>
@@ -77,9 +79,14 @@ export function CartDrawer() {
           </div>
         )}
 
-        {upsells.length > 0 && items.length > 0 && (
+        {upsells.length > 0 && items.length > 0 && !hideUpsell && (
           <div className="upsell">
-            <p>BUY IT WITH</p>
+            <div className="upsell__head">
+              <p>BUY IT WITH</p>
+              <button type="button" className="upsell__dismiss" aria-label="BUY IT WITH を非表示" onClick={() => setHideUpsell(true)}>
+                <IconClose />
+              </button>
+            </div>
             {upsells.map((product) => (
               <div key={product.id} className="upsell__row">
                 <img src={product.images[0]} alt="" />

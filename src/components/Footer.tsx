@@ -24,7 +24,9 @@ export function Footer() {
         <div>
           <h3>Info</h3>
           <Link to="/about">ブランドストーリー</Link>
-          <Link to="/shop">配送・返品について</Link>
+          <Link to="/shipping">配送・返品について</Link>
+          <Link to="/tokushoho">特定商取引法に基づく表記</Link>
+          <Link to="/privacy">プライバシーポリシー</Link>
           <a href={`mailto:${brand.email}`}>お問い合わせ</a>
         </div>
       </div>

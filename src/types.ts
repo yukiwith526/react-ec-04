@@ -1,5 +1,13 @@
 export type Category = 'makeup' | 'skincare' | 'fragrance' | 'gift'
 
+export type Member = {
+  id: string
+  email: string
+  name: string
+  zip: string
+  address: string
+}
+
 export type Product = {
   id: string
   slug: string

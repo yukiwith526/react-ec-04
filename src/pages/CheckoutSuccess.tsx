@@ -47,7 +47,7 @@ export function CheckoutSuccess() {
           <p>
             {email} 宛の注文を受け付けました。
             {total != null ? ` お支払い金額は ${formatPrice(total)} です。` : ''}
-            ご入力のメールアドレスに注文内容をお送りします。
+            ご入力のメールアドレスに注文内容をお送りします（Resend のテスト送信のため、実際には届かない場合があります）。
           </p>
         </>
       )}

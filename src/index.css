@@ -244,6 +244,10 @@ main {
   justify-content: flex-end;
 }
 
+.header__account {
+  transform: translateX(8px);
+}
+
 .header svg {
   width: 22px;
   height: 22px;
@@ -882,6 +886,17 @@ main {
   width: 120px;
 }
 
+.qty--sm {
+  margin: 6px 0 4px;
+}
+
+.qty--sm button,
+.qty--sm span {
+  width: 32px;
+  height: 28px;
+  font-size: 13px;
+}
+
 .wish-inline {
   display: inline-flex;
   align-items: center;
@@ -1030,6 +1045,15 @@ main {
   background: #fff;
 }
 
+.mini-line--edit {
+  align-items: start;
+}
+
+.mini-line--edit p {
+  margin: 0;
+  font-size: 13px;
+}
+
 .cart-line h3 {
   margin: 0;
   font-family: var(--sans);
@@ -1051,13 +1075,37 @@ main {
 }
 
 .upsell {
+  position: relative;
   border-top: 1px solid var(--line);
   padding-top: 16px;
 }
 
+.upsell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
 .upsell p {
+  margin: 0;
   letter-spacing: 0.18em;
   font-size: 11px;
+}
+
+.upsell__dismiss {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+}
+
+.upsell__dismiss svg {
+  width: 16px;
+  height: 16px;
 }
 
 .cart-foot {
@@ -1268,8 +1316,106 @@ main {
   padding: 12px;
 }
 
+.auth-panel {
+  max-width: 480px;
+}
+
+.auth-panel .text-btn {
+  margin-top: 8px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.auth-tabs button {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: #fff;
+  letter-spacing: 0.08em;
+}
+
+.auth-tabs button.is-on {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-top: 24px;
+}
+
 .checkout__total {
   font-size: 20px;
+}
+
+.legal {
+  width: min(760px, calc(100% - 40px));
+}
+
+.legal h2 {
+  margin: 36px 0 10px;
+  font-size: 18px;
+}
+
+.legal a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal p,
+.legal li,
+.legal dd {
+  color: var(--muted);
+  line-height: 1.9;
+  font-size: 14px;
+}
+
+.legal ul {
+  padding-left: 1.2em;
+}
+
+.legal__dl {
+  display: grid;
+  grid-template-columns: 10.5em 1fr;
+  gap: 18px 28px;
+  margin: 0;
+}
+
+.legal__dl dt {
+  margin: 0;
+  font-size: 13px;
+}
+
+.legal__dl dd {
+  margin: 0;
+}
+
+.legal__note {
+  margin-top: 36px;
+}
+
+.legal__note a,
+.checkout .checkout__brief a {
+  display: inline;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.checkout__brief {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
 }
 
 .checkout--done {
@@ -1305,6 +1451,15 @@ main {
 
   .instagram__grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .legal__dl {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .legal__dl dt {
+    margin-top: 12px;
   }
 
   .pickup .carousel__track {
@@ -1761,6 +1916,10 @@ main {
 
   .header__left {
     gap: 4px;
+  }
+
+  .header__account {
+    transform: translateX(10px);
   }
 
   .hero {

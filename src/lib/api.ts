@@ -1,4 +1,4 @@
-import type { AdminCustomer, AdminOrder, AdminProduct, Category, Product } from '../types'
+import type { AdminCustomer, AdminOrder, AdminProduct, Category, Member, Product } from '../types'
 
 export class ApiError extends Error {
   status: number
@@ -25,6 +25,65 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     )
   }
   return data as T
+}
+
+export function fetchMe() {
+  return fetch('/api/me', { credentials: 'include' }).then(async (response) => {
+    if (response.status === 401) return null
+    const data = (await response.json().catch(() => null)) as { member?: Member; error?: string } | null
+    if (!response.ok) {
+      throw new ApiError(data?.error || `Request failed (${response.status})`, response.status)
+    }
+    return data?.member ?? null
+  })
+}
+
+export function registerMember(payload: {
+  name: string
+  email: string
+  password: string
+  zip?: string
+  address?: string
+}) {
+  return request<{
+    pending: boolean
+    message: string
+    verifyUrl?: string
+    emailTestMode?: boolean
+    canLogin?: boolean
+  }>('/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function verifyMemberEmail(token: string) {
+  return request<{ member: Member }>('/api/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  }).then((data) => data.member)
+}
+
+export function loginMember(payload: { email: string; password: string }) {
+  return request<{ member: Member }>('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then((data) => data.member)
+}
+
+export function logoutMember() {
+  return request<{ ok: boolean }>('/api/logout', { method: 'POST' })
+}
+
+export function updateMember(payload: { name: string; zip: string; address: string }) {
+  return request<{ member: Member }>('/api/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then((data) => data.member)
 }
 
 export function fetchProducts(params?: { category?: string; q?: string; isNew?: boolean }) {

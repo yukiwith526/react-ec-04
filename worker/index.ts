@@ -13,6 +13,14 @@ import {
   updateProduct,
 } from './catalog'
 import {
+  currentMember,
+  loginMember,
+  logoutMember,
+  registerMember,
+  updateMemberProfile,
+  verifyMemberEmail,
+} from './members'
+import {
   completeCheckoutSession,
   createCheckoutSession,
   getAdminCustomer,
@@ -84,6 +92,36 @@ export default {
       if (!product) return jsonError('Product not found', 404)
       const related = await getRelated(env, product)
       return json({ product, related })
+    }
+
+    if (pathname === '/api/register' && request.method === 'POST') {
+      return registerMember(request, env)
+    }
+
+    if (pathname === '/api/login' && request.method === 'POST') {
+      return loginMember(request, env)
+    }
+
+    if (pathname === '/api/verify-email' && request.method === 'GET') {
+      const token = url.searchParams.get('token') ?? ''
+      const location = token ? `${url.origin}/verify-email/${encodeURIComponent(token)}` : `${url.origin}/login`
+      return new Response(null, { status: 302, headers: { Location: location } })
+    }
+
+    if (pathname === '/api/verify-email' && request.method === 'POST') {
+      return verifyMemberEmail(request, env)
+    }
+
+    if (pathname === '/api/logout' && request.method === 'POST') {
+      return logoutMember(request)
+    }
+
+    if (pathname === '/api/me' && request.method === 'GET') {
+      return currentMember(request, env)
+    }
+
+    if (pathname === '/api/me' && request.method === 'PUT') {
+      return updateMemberProfile(request, env)
     }
 
     if (pathname === '/api/stripe/webhook' && request.method === 'POST') {

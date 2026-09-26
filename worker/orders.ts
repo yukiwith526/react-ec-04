@@ -1,5 +1,6 @@
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../src/data/storefront'
 import { jsonError } from './auth'
+import { getMember } from './members'
 import { sendOrderConfirmation } from './email'
 import {
   createStripeCheckoutSession,
@@ -198,7 +199,7 @@ async function sendPaidOrderEmail(
 
   try {
     const sent = await sendOrderConfirmation(env, order)
-    if (!sent) return
+    if (!sent.ok) return
     await env.DB.prepare(
       `UPDATE orders SET email_sent_at = ? WHERE id = ? AND email_sent_at IS NULL`,
     )
@@ -271,6 +272,9 @@ function parseCart(body: unknown): { customer: { name: string; email: string; zi
 }
 
 export async function createCheckoutSession(request: Request, env: Env) {
+  const member = await getMember(request, env)
+  if (!member) return jsonError('ログインが必要です', 401, 'MEMBER_REQUIRED')
+
   if (!env.STRIPE_SECRET_KEY) {
     return jsonError('Stripe is not configured', 501, 'STRIPE_NOT_CONFIGURED')
   }
@@ -315,23 +319,14 @@ export async function createCheckoutSession(request: Request, env: Env) {
   if (total < 50) return jsonError('Order total is too small', 400)
 
   const now = new Date().toISOString()
-  const customerId = crypto.randomUUID()
+  const name = parsed.customer.name || member.name
+  const zip = parsed.customer.zip || member.zip
+  const address = parsed.customer.address || member.address
   await env.DB.prepare(
-    `INSERT INTO customers (id, email, name, zip, address, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET
-       name = excluded.name,
-       zip = excluded.zip,
-       address = excluded.address,
-       updated_at = excluded.updated_at`,
+    `UPDATE customers SET name = ?, zip = ?, address = ?, updated_at = ? WHERE id = ?`,
   )
-    .bind(customerId, parsed.customer.email, parsed.customer.name, parsed.customer.zip, parsed.customer.address, now, now)
+    .bind(name, zip, address, now, member.id)
     .run()
-
-  const customer = await env.DB.prepare('SELECT id FROM customers WHERE email = ?')
-    .bind(parsed.customer.email)
-    .first<{ id: string }>()
-  if (!customer) return jsonError('Failed to save customer', 500)
 
   const orderId = crypto.randomUUID()
   await env.DB.prepare(
@@ -342,11 +337,11 @@ export async function createCheckoutSession(request: Request, env: Env) {
   )
     .bind(
       orderId,
-      customer.id,
-      parsed.customer.email,
-      parsed.customer.name,
-      parsed.customer.zip,
-      parsed.customer.address,
+      member.id,
+      member.email,
+      name,
+      zip,
+      address,
       subtotal,
       shipping,
       total,
@@ -380,7 +375,7 @@ export async function createCheckoutSession(request: Request, env: Env) {
   try {
     const session = await createStripeCheckoutSession(env.STRIPE_SECRET_KEY, {
       orderId,
-      email: parsed.customer.email,
+      email: member.email,
       successUrl: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${origin}/checkout`,
       lineItems: stripeLines,

@@ -1,4 +1,6 @@
 ENVIRONMENT=development
+# MEMBER_JWT_SECRET must be a unique 32+ character value. Never reuse this example in production.
+MEMBER_JWT_SECRET=replace-with-a-long-unique-local-secret
 STRIPE_SECRET_KEY=sk_test_replace_me
 # STRIPE_WEBHOOK_SECRET=whsec_replace_me
 # RESEND_API_KEY=re_replace_me

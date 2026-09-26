@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
 import { brand, categories } from '../data/storefront'
+import { useAuth } from '../context/AuthContext'
 import { useUi } from '../context/UiContext'
 import { IconClose } from './Icons'
 
 export function NavDrawer() {
   const { navOpen, closeNav } = useUi()
+  const { member } = useAuth()
 
   return (
     <>
@@ -28,8 +30,20 @@ export function NavDrawer() {
               {category.labelJa}
             </Link>
           ))}
+          <Link to={member ? '/account' : '/login'} onClick={closeNav}>
+            {member ? 'マイページ' : 'ログイン / 会員登録'}
+          </Link>
           <Link to="/about" onClick={closeNav}>
             ブランドについて
+          </Link>
+          <Link to="/shipping" onClick={closeNav}>
+            配送・返品について
+          </Link>
+          <Link to="/tokushoho" onClick={closeNav}>
+            特定商取引法に基づく表記
+          </Link>
+          <Link to="/privacy" onClick={closeNav}>
+            プライバシーポリシー
           </Link>
         </nav>
       </aside>
