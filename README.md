@@ -37,14 +37,17 @@ npm run dev
 
 確認メールは Resend のテスト送信（`onboarding@resend.dev`）です。任意のアドレスには届きません。登録後は画面の案内どおり、同じメールとパスワードでログインへ進んでください。
 
-## Stripe（テスト決済）
+## Stripe（サンドボックス決済）
 
-チェックアウトから Stripe Checkout へリダイレクトします。テストカードは `ACCT-000015`（有効期限は未来、CVC は任意）です。
+チェックアウトは Stripe Checkout のサンドボックスへリダイレクトします。テストカードは `4242 4242 4242 4242`（有効期限は未来、CVC は任意）です。本番キー（`sk_live_` / `rk_live_`）はサーバーが拒否します。
 
-Worker には `STRIPE_SECRET_KEY`（テストキー）を入れてください。Webhook は任意で、成功画面が `session_id` から支払いを確認します。
+`.dev.vars` の `STRIPE_SECRET_KEY` にはサンドボックスの秘密キー（`sk_test_`、`rk_test_`、または Stripe CLI の `rkcs_test_`）を入れてください。CLI で作ったサンドボックスには期限があり、切れると決済開始時に「APIキーの期限が切れています」と出ます。そのときは `stripe login` で新しいサンドボックスを作り、出たテスト用シークレットキーで `.dev.vars` を更新して開発サーバーを再起動してください。
+
+入金にする条件は、Webhook 署名が正しいことに加えて、通貨が JPY、金額と注文 ID が注文と一致し、`payment_status` が `paid` であることです。成功画面の確認も、ログイン中の注文者だけが実行できます。
 
 ```bash
 npx wrangler secret put STRIPE_SECRET_KEY
-# 任意
 npx wrangler secret put STRIPE_WEBHOOK_SECRET
 ```
+
+Webhook の送信先は `/api/stripe/webhook` です。対象は `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired` です。

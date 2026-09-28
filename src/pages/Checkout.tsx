@@ -96,7 +96,7 @@ export function Checkout() {
                 />
               </label>
               <h2>お支払い</h2>
-              <p className="muted">Stripe のテスト決済ページへ移動します。カード番号は ACCT-000015 を使えます。</p>
+              <p className="muted">Stripe のサンドボックス決済ページへ移動します。カード番号は 4242 4242 4242 4242、有効期限は未来の日付、CVC は任意の3桁です。</p>
               {error && <p className="empty">{error}</p>}
               <button type="submit" className="btn btn--terracotta" disabled={busy}>
                 {busy ? '接続中...' : `${formatPrice(total)} を支払う`}

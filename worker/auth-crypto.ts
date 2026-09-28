@@ -81,8 +81,9 @@ export function decideRateLimit(
   return { action: 'hit' as const, count: row.count + 1, reset_at: row.reset_at }
 }
 
-export function rateLimitUserMessage(kind: 'register' | 'login' | 'verify', retryAfterSec: number) {
+export function rateLimitUserMessage(kind: 'register' | 'login' | 'verify' | 'checkout', retryAfterSec: number) {
   const minutes = Math.max(1, Math.ceil(retryAfterSec / 60))
-  const label = kind === 'register' ? '会員登録' : kind === 'login' ? 'ログイン' : 'メール確認'
+  const label =
+    kind === 'register' ? '会員登録' : kind === 'login' ? 'ログイン' : kind === 'checkout' ? '決済' : 'メール確認'
   return `${label}の試行回数が上限です。約${minutes}分後に再度お試しください。`
 }

@@ -120,12 +120,12 @@ export async function getMember(request: Request, env: Env): Promise<Member | nu
   }
 }
 
-async function assertRateLimit(
+export async function enforceRateLimit(
   env: Env,
   bucket: string,
   limit: number,
   windowMs: number,
-  kind: 'register' | 'login' | 'verify',
+  kind: 'register' | 'login' | 'verify' | 'checkout',
 ) {
   const now = Date.now()
   const row = await env.DB.prepare('SELECT count, reset_at FROM auth_rate_limits WHERE bucket = ?')
@@ -188,7 +188,7 @@ function verifyUrl(request: Request, token: string) {
 }
 
 export async function registerMember(request: Request, env: Env) {
-  const limited = await assertRateLimit(env, `register:${clientIp(request)}`, 20, 60 * 60 * 1000, 'register')
+  const limited = await enforceRateLimit(env, `register:${clientIp(request)}`, 20, 60 * 60 * 1000, 'register')
   if (limited) return limited
 
   const parsed = parseAuthBody(await request.json().catch(() => null), true)
@@ -269,7 +269,7 @@ export async function registerMember(request: Request, env: Env) {
 }
 
 export async function loginMember(request: Request, env: Env) {
-  const limited = await assertRateLimit(env, `login:${clientIp(request)}`, 10, 15 * 60 * 1000, 'login')
+  const limited = await enforceRateLimit(env, `login:${clientIp(request)}`, 10, 15 * 60 * 1000, 'login')
   if (limited) return limited
 
   const parsed = parseAuthBody(await request.json().catch(() => null), false)
@@ -396,7 +396,7 @@ async function consumeVerificationToken(env: Env, rawToken: string) {
 }
 
 export async function verifyMemberEmail(request: Request, env: Env) {
-  const limited = await assertRateLimit(env, `verify:${clientIp(request)}`, 30, 60 * 60 * 1000, 'verify')
+  const limited = await enforceRateLimit(env, `verify:${clientIp(request)}`, 30, 60 * 60 * 1000, 'verify')
   if (limited) return limited
 
   const body = (await request.json().catch(() => null)) as { token?: unknown } | null

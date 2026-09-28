@@ -134,7 +134,7 @@ export default {
 
     const checkoutSession = pathname.match(/^\/api\/checkout\/session\/([^/]+)$/)
     if (checkoutSession && request.method === 'GET') {
-      return completeCheckoutSession(env, decodeURIComponent(checkoutSession[1]))
+      return completeCheckoutSession(request, env, decodeURIComponent(checkoutSession[1]))
     }
 
     if (pathname.startsWith('/api/admin/')) {

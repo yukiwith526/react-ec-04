@@ -1,10 +1,14 @@
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../src/data/storefront'
 import { jsonError } from './auth'
-import { getMember } from './members'
+import { enforceRateLimit, getMember } from './members'
 import { sendOrderConfirmation } from './email'
 import {
+  classifyStripeSecret,
   createStripeCheckoutSession,
+  decideFulfillment,
+  publicStripeFailure,
   retrieveStripeCheckoutSession,
+  StripeRequestError,
   stripePaymentIntentId,
   verifyStripeWebhook,
   type StripeCheckoutSession,
@@ -34,6 +38,7 @@ type OrderRow = {
   subtotal: number
   shipping: number
   total: number
+  stock_held: number
   created_at: string
   paid_at: string | null
   email_sent_at: string | null
@@ -157,7 +162,81 @@ async function getOrder(env: Env, id: string) {
   return mapOrder(row, items.get(id) ?? [])
 }
 
+function stripeNotReady(secret: string | undefined) {
+  const kind = classifyStripeSecret(secret)
+  if (kind === 'sandbox') return null
+  const code = kind === 'live' ? 'live_key_refused' : kind === 'missing' ? 'missing_key' : 'invalid_key'
+  const failure = publicStripeFailure(new StripeRequestError(code))
+  return jsonError(failure.message, failure.status, failure.code)
+}
+
+function stripeFailed(error: unknown) {
+  const failure = publicStripeFailure(error)
+  console.error(JSON.stringify({ level: 'error', event: 'checkout', code: failure.code }))
+  return jsonError(failure.message, failure.status, failure.code)
+}
+
+async function adjustStock(env: Env, orderId: string, direction: 1 | -1) {
+  const now = new Date().toISOString()
+  const { results } = await env.DB.prepare(
+    'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+  )
+    .bind(orderId)
+    .all<{ product_id: string; quantity: number }>()
+  for (const item of results) {
+    const quantity = item.quantity * direction
+    if (direction < 0) {
+      await env.DB.prepare(
+        'UPDATE products SET stock = MAX(stock + ?, 0), updated_at = ? WHERE id = ?',
+      )
+        .bind(quantity, now, item.product_id)
+        .run()
+    } else {
+      await env.DB.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?')
+        .bind(quantity, now, item.product_id)
+        .run()
+    }
+  }
+}
+
+async function returnHeldStock(env: Env, needed: Map<string, number>) {
+  const now = new Date().toISOString()
+  for (const [productId, quantity] of needed) {
+    await env.DB.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?')
+      .bind(quantity, now, productId)
+      .run()
+  }
+}
+
+async function holdStock(env: Env, needed: Map<string, number>) {
+  const now = new Date().toISOString()
+  const held: { productId: string; quantity: number }[] = []
+  for (const [productId, quantity] of needed) {
+    const updated = await env.DB.prepare(
+      'UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ? AND is_published = 1 AND stock >= ?',
+    )
+      .bind(quantity, now, productId, quantity)
+      .run()
+    if (updated.meta.changes !== 1) {
+      for (const item of held) {
+        await env.DB.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?')
+          .bind(item.quantity, now, item.productId)
+          .run()
+      }
+      return false
+    }
+    held.push({ productId, quantity })
+  }
+  return true
+}
+
 async function fulfillPaidOrder(env: Env, orderId: string, paymentIntentId: string | null) {
+  const existing = await env.DB.prepare('SELECT status, stock_held FROM orders WHERE id = ?')
+    .bind(orderId)
+    .first<{ status: string; stock_held: number }>()
+  if (!existing) return null
+  if (existing.status === 'paid') return getOrder(env, orderId)
+
   const now = new Date().toISOString()
   const updated = await env.DB.prepare(
     `UPDATE orders
@@ -167,23 +246,8 @@ async function fulfillPaidOrder(env: Env, orderId: string, paymentIntentId: stri
     .bind(paymentIntentId, now, orderId)
     .run()
 
-  const changed = updated.meta.changes
-  if (changed === 0) return getOrder(env, orderId)
-
-  const { results } = await env.DB.prepare(
-    'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
-  )
-    .bind(orderId)
-    .all<{ product_id: string; quantity: number }>()
-
-  for (const item of results) {
-    await env.DB.prepare(
-      'UPDATE products SET stock = MAX(stock - ?, 0), updated_at = ? WHERE id = ?',
-    )
-      .bind(item.quantity, now, item.product_id)
-      .run()
-  }
-
+  if (updated.meta.changes === 0) return getOrder(env, orderId)
+  if (existing.stock_held !== 1) await adjustStock(env, orderId, -1)
   return getOrder(env, orderId)
 }
 
@@ -211,32 +275,58 @@ async function sendPaidOrderEmail(
 }
 
 async function cancelPendingOrder(env: Env, orderId: string) {
+  const released = await env.DB.prepare(
+    `UPDATE orders SET status = 'canceled', stock_held = 0 WHERE id = ? AND status = 'pending' AND stock_held = 1`,
+  )
+    .bind(orderId)
+    .run()
+  if (released.meta.changes === 1) {
+    await adjustStock(env, orderId, 1)
+    return getOrder(env, orderId)
+  }
   await env.DB.prepare(`UPDATE orders SET status = 'canceled' WHERE id = ? AND status = 'pending'`)
     .bind(orderId)
     .run()
   return getOrder(env, orderId)
 }
 
+async function releaseStaleHolds(env: Env) {
+  const cutoff = new Date(Date.now() - 35 * 60 * 1000).toISOString()
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM orders WHERE status = 'pending' AND stock_held = 1 AND created_at < ? ORDER BY created_at ASC LIMIT 50`,
+  )
+    .bind(cutoff)
+    .all<{ id: string }>()
+  for (const row of results) await cancelPendingOrder(env, row.id)
+}
+
 async function applyStripeSession(env: Env, session: StripeCheckoutSession) {
   const orderId =
     session.metadata?.order_id ||
+    session.client_reference_id ||
     (
       await env.DB.prepare('SELECT id FROM orders WHERE stripe_checkout_session_id = ?')
         .bind(session.id)
         .first<{ id: string }>()
     )?.id
 
-  if (!orderId) return null
+  if (!orderId) return { order: null, rejected: true }
+  const existing = await getOrder(env, orderId)
+  if (!existing) return { order: null, rejected: false }
 
-  if (session.payment_status === 'paid' || session.status === 'complete') {
+  const decision = decideFulfillment(session, {
+    id: existing.id,
+    total: existing.total,
+    sessionId: existing.stripeCheckoutSessionId,
+  })
+  if (decision === 'reject') return { order: existing, rejected: true }
+  if (decision === 'paid') {
     const order = await fulfillPaidOrder(env, orderId, stripePaymentIntentId(session))
     if (order) await sendPaidOrderEmail(env, order)
-    return order
+    return { order, rejected: false }
   }
-  if (session.status === 'expired') {
-    return cancelPendingOrder(env, orderId)
-  }
-  return getOrder(env, orderId)
+  if (decision === 'cancel') return { order: await cancelPendingOrder(env, orderId), rejected: false }
+  return { order: existing, rejected: false }
 }
 
 function parseCart(body: unknown): { customer: { name: string; email: string; zip: string; address: string }; items: CartLine[] } | Response {
@@ -275,9 +365,11 @@ export async function createCheckoutSession(request: Request, env: Env) {
   const member = await getMember(request, env)
   if (!member) return jsonError('ログインが必要です', 401, 'MEMBER_REQUIRED')
 
-  if (!env.STRIPE_SECRET_KEY) {
-    return jsonError('Stripe is not configured', 501, 'STRIPE_NOT_CONFIGURED')
-  }
+  const notReady = stripeNotReady(env.STRIPE_SECRET_KEY)
+  if (notReady) return notReady
+
+  const limited = await enforceRateLimit(env, `checkout:${member.id}`, 8, 10 * 60 * 1000, 'checkout')
+  if (limited) return limited
 
   const parsed = parseCart(await request.json().catch(() => null))
   if (parsed instanceof Response) return parsed
@@ -290,6 +382,8 @@ export async function createCheckoutSession(request: Request, env: Env) {
     else grouped.set(key, { ...item })
   }
   const lines = [...grouped.values()]
+
+  await releaseStaleHolds(env)
 
   const productIds = [...new Set(lines.map((item) => item.productId))]
   const placeholders = productIds.map(() => '?').join(', ')
@@ -318,114 +412,133 @@ export async function createCheckoutSession(request: Request, env: Env) {
   const total = subtotal + shipping
   if (total < 50) return jsonError('Order total is too small', 400)
 
+  if (!(await holdStock(env, needed))) return jsonError('Insufficient stock', 409, 'OUT_OF_STOCK')
+
   const now = new Date().toISOString()
   const name = parsed.customer.name || member.name
   const zip = parsed.customer.zip || member.zip
   const address = parsed.customer.address || member.address
-  await env.DB.prepare(
-    `UPDATE customers SET name = ?, zip = ?, address = ?, updated_at = ? WHERE id = ?`,
-  )
-    .bind(name, zip, address, now, member.id)
-    .run()
-
   const orderId = crypto.randomUUID()
-  await env.DB.prepare(
-    `INSERT INTO orders (
-      id, customer_id, email, name, zip, address, status,
-      subtotal, shipping, total, currency, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'jpy', ?)`,
-  )
-    .bind(
-      orderId,
-      member.id,
-      member.email,
-      name,
-      zip,
-      address,
-      subtotal,
-      shipping,
-      total,
-      now,
-    )
-    .run()
-
-  for (const line of lines) {
-    const product = productMap.get(line.productId)!
-    await env.DB.prepare(
-      `INSERT INTO order_items (id, order_id, product_id, product_name, scent, quantity, unit_price)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(crypto.randomUUID(), orderId, product.id, product.name, line.scent ?? null, line.quantity, product.price)
-      .run()
-  }
-
-  const origin = new URL(request.url).origin
-  const stripeLines = lines.map((line) => {
-    const product = productMap.get(line.productId)!
-    return {
-      name: line.scent ? `${product.name} / ${line.scent}` : product.name,
-      amount: product.price,
-      quantity: line.quantity,
-    }
-  })
-  if (shipping > 0) {
-    stripeLines.push({ name: '送料', amount: shipping, quantity: 1 })
-  }
-
   try {
-    const session = await createStripeCheckoutSession(env.STRIPE_SECRET_KEY, {
+    await env.DB.prepare(
+      `UPDATE customers SET name = ?, zip = ?, address = ?, updated_at = ? WHERE id = ?`,
+    )
+      .bind(name, zip, address, now, member.id)
+      .run()
+
+    await env.DB.prepare(
+      `INSERT INTO orders (
+        id, customer_id, email, name, zip, address, status,
+        subtotal, shipping, total, currency, stock_held, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'jpy', 1, ?)`,
+    )
+      .bind(
+        orderId,
+        member.id,
+        member.email,
+        name,
+        zip,
+        address,
+        subtotal,
+        shipping,
+        total,
+        now,
+      )
+      .run()
+
+    for (const line of lines) {
+      const product = productMap.get(line.productId)!
+      await env.DB.prepare(
+        `INSERT INTO order_items (id, order_id, product_id, product_name, scent, quantity, unit_price)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(crypto.randomUUID(), orderId, product.id, product.name, line.scent ?? null, line.quantity, product.price)
+        .run()
+    }
+
+    const origin = new URL(request.url).origin
+    const stripeLines = lines.map((line) => {
+      const product = productMap.get(line.productId)!
+      return {
+        name: line.scent ? `${product.name} / ${line.scent}` : product.name,
+        amount: product.price,
+        quantity: line.quantity,
+      }
+    })
+    if (shipping > 0) {
+      stripeLines.push({ name: '送料', amount: shipping, quantity: 1 })
+    }
+
+    const session = await createStripeCheckoutSession(env.STRIPE_SECRET_KEY!, {
       orderId,
       email: member.email,
       successUrl: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${origin}/checkout`,
       lineItems: stripeLines,
     })
-    if (!session.url) throw new Error('Stripe did not return a checkout URL')
     await env.DB.prepare('UPDATE orders SET stripe_checkout_session_id = ? WHERE id = ?')
       .bind(session.id, orderId)
       .run()
     return Response.json({ url: session.url, orderId })
   } catch (error) {
+    await returnHeldStock(env, needed)
     await env.DB.prepare('DELETE FROM order_items WHERE order_id = ?').bind(orderId).run()
-    await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(orderId).run()
-    return jsonError(error instanceof Error ? error.message : 'Stripe checkout failed', 502)
+    await env.DB.prepare(`DELETE FROM orders WHERE id = ? AND status = 'pending'`).bind(orderId).run()
+    return stripeFailed(error)
   }
 }
 
-export async function completeCheckoutSession(env: Env, sessionId: string) {
-  if (!env.STRIPE_SECRET_KEY) {
-    return jsonError('Stripe is not configured', 501, 'STRIPE_NOT_CONFIGURED')
+export async function completeCheckoutSession(request: Request, env: Env, sessionId: string) {
+  const member = await getMember(request, env)
+  if (!member) return jsonError('ログインが必要です', 401, 'MEMBER_REQUIRED')
+
+  const notReady = stripeNotReady(env.STRIPE_SECRET_KEY)
+  if (notReady) return notReady
+  if (!/^cs_test_[A-Za-z0-9]+$/.test(sessionId) || sessionId.length > 255) {
+    return jsonError('Invalid session', 400)
   }
-  if (!sessionId.startsWith('cs_')) return jsonError('Invalid session', 400)
+
+  const owner = await env.DB.prepare(
+    'SELECT customer_id FROM orders WHERE stripe_checkout_session_id = ?',
+  )
+    .bind(sessionId)
+    .first<{ customer_id: string }>()
+  if (!owner || owner.customer_id !== member.id) return jsonError('Order not found', 404)
 
   try {
-    const session = await retrieveStripeCheckoutSession(env.STRIPE_SECRET_KEY, sessionId)
-    const order = await applyStripeSession(env, session)
-    if (!order) return jsonError('Order not found', 404)
+    const session = await retrieveStripeCheckoutSession(env.STRIPE_SECRET_KEY!, sessionId)
+    const result = await applyStripeSession(env, session)
+    if (result.rejected) return jsonError('支払い内容を確認できませんでした', 409, 'STRIPE_MISMATCH')
+    if (!result.order || result.order.customerId !== member.id) return jsonError('Order not found', 404)
     return Response.json({
-      status: order.status,
-      orderId: order.id,
-      email: order.email,
-      total: order.total,
+      status: result.order.status,
+      orderId: result.order.id,
+      email: result.order.email,
+      total: result.order.total,
     })
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unable to verify payment', 502)
+    return stripeFailed(error)
   }
 }
 
 export async function handleStripeWebhook(request: Request, env: Env) {
-  if (!env.STRIPE_WEBHOOK_SECRET) {
+  const secret = env.STRIPE_WEBHOOK_SECRET?.trim() ?? ''
+  if (!secret.startsWith('whsec_')) {
     return jsonError('Stripe webhook is not configured', 501, 'STRIPE_WEBHOOK_NOT_CONFIGURED')
   }
   const payload = await request.text()
+  if (payload.length > 200_000) return jsonError('Invalid webhook payload', 400)
   const signature = request.headers.get('stripe-signature') ?? ''
-  const valid = await verifyStripeWebhook(payload, signature, env.STRIPE_WEBHOOK_SECRET)
+  const valid = await verifyStripeWebhook(payload, signature, secret)
   if (!valid) return jsonError('Invalid Stripe signature', 400)
 
   let event: StripeEvent
   try {
     event = JSON.parse(payload) as StripeEvent
   } catch {
+    return jsonError('Invalid webhook payload', 400)
+  }
+  if (!event?.data?.object || typeof event.type !== 'string') {
     return jsonError('Invalid webhook payload', 400)
   }
 
@@ -437,8 +550,12 @@ export async function handleStripeWebhook(request: Request, env: Env) {
   ) {
     if (event.type === 'checkout.session.async_payment_failed') {
       event.data.object.status = 'expired'
+      event.data.object.payment_status = 'unpaid'
     }
-    await applyStripeSession(env, event.data.object)
+    const result = await applyStripeSession(env, event.data.object)
+    if (result.rejected) {
+      console.error(JSON.stringify({ level: 'error', event: 'stripe_webhook', code: 'STRIPE_MISMATCH', type: event.type }))
+    }
   }
 
   return Response.json({ received: true })
