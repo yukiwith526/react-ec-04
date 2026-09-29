@@ -3,6 +3,26 @@
 ジルスチュアートのような、花と光をモチーフにした女性向けコスメのデモ EC。  
 React + Cloudflare Workers / D1 / R2。カート〜決済の骨格は `EC`（Good Skin.）と同じです。
 
+## 店頭
+
+![トップ](docs/storefront.jpg)
+
+![商品一覧](docs/shop.jpg)
+
+![商品詳細](docs/product.jpg)
+
+## 管理画面
+
+`/admin`。本番は Cloudflare Access。
+
+![商品管理](docs/admin-products.png)
+
+![商品編集](docs/admin-product-edit.png)
+
+![注文](docs/admin-orders.png)
+
+![顧客](docs/admin-customers.png)
+
 ## ページ
 
 店頭

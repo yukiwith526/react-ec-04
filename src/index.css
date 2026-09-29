@@ -2046,12 +2046,25 @@ main {
     padding: 8px;
   }
 
+  .product-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .product-card__info {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+
   .product-card__info h3 {
     font-size: 12px;
+    min-height: 3em;
   }
 
   .btn--cart {
     min-height: 40px;
+    margin-top: auto;
     letter-spacing: 0.08em;
   }
 

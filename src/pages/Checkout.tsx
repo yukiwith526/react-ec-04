@@ -96,7 +96,6 @@ export function Checkout() {
                 />
               </label>
               <h2>お支払い</h2>
-              <p className="muted">Stripe のサンドボックス決済ページへ移動します。カード番号は 4242 4242 4242 4242、有効期限は未来の日付、CVC は任意の3桁です。</p>
               {error && <p className="empty">{error}</p>}
               <button type="submit" className="btn btn--terracotta" disabled={busy}>
                 {busy ? '接続中...' : `${formatPrice(total)} を支払う`}
@@ -104,7 +103,7 @@ export function Checkout() {
               <p className="checkout__brief">
                 お支払いはクレジットカードです。決済が完了したときに課金されます。
                 <br />
-                商品は、決済確認後、原則2〜7営業日以内に発送します。
+                商品は、決済確認後、原則7営業日以内に発送します。
                 <br />
                 返品は、未開封・未使用の商品に限り、到着後7日以内にご連絡ください。お客様都合の返送料はお客様負担となります。不良品や誤配送の場合は、当店負担で交換または返金いたします。
               </p>

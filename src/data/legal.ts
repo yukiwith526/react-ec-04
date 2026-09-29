@@ -12,7 +12,7 @@ export const legal = {
   paymentMethod: 'クレジットカード（Stripe）のみ',
   paymentTiming: 'ご注文の確定時（カード決済の完了時）に課金します。',
   dispatchTiming:
-    '決済確認後、原則2〜7営業日以内に発送します。在庫切れや天候・交通事情により遅れる場合は、メールでご連絡します。',
+    '決済確認後、原則7営業日以内に発送します。在庫切れや天候・交通事情により遅れる場合は、メールでご連絡します。',
 }
 
 export const returns = {
