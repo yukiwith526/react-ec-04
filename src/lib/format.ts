@@ -12,6 +12,16 @@ export function orderStatusLabel(status: 'pending' | 'paid' | 'canceled') {
   return '未決済'
 }
 
+export function memberOrderStatusLabel(status: 'pending' | 'paid' | 'canceled') {
+  if (status === 'paid') return '注文確定'
+  if (status === 'canceled') return 'キャンセル'
+  return 'お支払い待ち'
+}
+
+export function orderNumber(id: string) {
+  return id.replace(/-/g, '').slice(0, 8).toUpperCase()
+}
+
 export function itemKey(productId: string, scent?: string) {
   return scent ? `${productId}__${scent}` : productId
 }

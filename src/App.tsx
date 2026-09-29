@@ -11,6 +11,7 @@ import { About } from './pages/About'
 import { Login } from './pages/Login'
 import { VerifyEmail } from './pages/VerifyEmail'
 import { Account } from './pages/Account'
+import { AccountOrder } from './pages/AccountOrder'
 import { Checkout } from './pages/Checkout'
 import { CheckoutSuccess } from './pages/CheckoutSuccess'
 import { Shipping } from './pages/Shipping'
@@ -52,6 +53,7 @@ export default function App() {
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/verify-email/:token" element={<VerifyEmail />} />
                 <Route path="/account" element={<Account />} />
+                <Route path="/account/orders/:id" element={<AccountOrder />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/checkout/success" element={<CheckoutSuccess />} />
                 <Route path="/shipping" element={<Shipping />} />

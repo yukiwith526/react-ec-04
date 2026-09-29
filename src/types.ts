@@ -54,6 +54,32 @@ export type CategoryItem = {
 
 export type OrderStatus = 'pending' | 'paid' | 'canceled'
 
+export type MemberOrderItem = {
+  id: string
+  productId: string
+  productName: string
+  slug: string | null
+  imageUrl: string | null
+  scent: string | null
+  quantity: number
+  unitPrice: number
+}
+
+export type MemberOrder = {
+  id: string
+  status: OrderStatus
+  name: string
+  email: string
+  zip: string
+  address: string
+  subtotal: number
+  shipping: number
+  total: number
+  createdAt: string
+  paidAt: string | null
+  items: MemberOrderItem[]
+}
+
 export type AdminOrderItem = {
   id: string
   productId: string

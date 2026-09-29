@@ -52,6 +52,8 @@ type ItemRow = {
   scent: string | null
   quantity: number
   unit_price: number
+  image_url?: string | null
+  product_slug?: string | null
 }
 
 type CustomerRow = {
@@ -582,4 +584,81 @@ export async function listAdminOrders(env: Env) {
 
 export async function getAdminOrder(env: Env, id: string) {
   return getOrder(env, id)
+}
+
+function mapMemberOrder(row: OrderRow, items: ItemRow[]) {
+  return {
+    id: row.id,
+    status: row.status,
+    name: row.name,
+    email: row.email,
+    zip: row.zip,
+    address: row.address,
+    subtotal: row.subtotal,
+    shipping: row.shipping,
+    total: row.total,
+    createdAt: row.created_at,
+    paidAt: row.paid_at,
+    items: items.map((item) => ({
+      id: item.id,
+      productId: item.product_id,
+      productName: item.product_name,
+      slug: item.product_slug ?? null,
+      imageUrl: item.image_url ?? null,
+      scent: item.scent,
+      quantity: item.quantity,
+      unitPrice: item.unit_price,
+    })),
+  }
+}
+
+async function memberItemsFor(env: Env, orderIds: string[]) {
+  if (orderIds.length === 0) return new Map<string, ItemRow[]>()
+  const placeholders = orderIds.map(() => '?').join(', ')
+  const { results } = await env.DB.prepare(
+    `SELECT
+       oi.*,
+       (
+         SELECT url FROM product_images
+         WHERE product_id = oi.product_id
+         ORDER BY sort_order ASC, id ASC
+         LIMIT 1
+       ) AS image_url,
+       (SELECT slug FROM products WHERE id = oi.product_id) AS product_slug
+     FROM order_items oi
+     WHERE oi.order_id IN (${placeholders})
+     ORDER BY oi.product_name ASC`,
+  )
+    .bind(...orderIds)
+    .all<ItemRow>()
+  const map = new Map<string, ItemRow[]>()
+  for (const item of results) {
+    const list = map.get(item.order_id) ?? []
+    list.push(item)
+    map.set(item.order_id, list)
+  }
+  return map
+}
+
+export async function listMemberOrders(request: Request, env: Env) {
+  const member = await getMember(request, env)
+  if (!member) return jsonError('ログインが必要です', 401, 'MEMBER_REQUIRED')
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC',
+  )
+    .bind(member.id)
+    .all<OrderRow>()
+  const items = await memberItemsFor(env, results.map((row) => row.id))
+  return Response.json(results.map((row) => mapMemberOrder(row, items.get(row.id) ?? [])))
+}
+
+export async function getMemberOrder(request: Request, env: Env, id: string) {
+  const member = await getMember(request, env)
+  if (!member) return jsonError('ログインが必要です', 401, 'MEMBER_REQUIRED')
+  const row = await env.DB.prepare('SELECT * FROM orders WHERE id = ? AND customer_id = ?')
+    .bind(id, member.id)
+    .first<OrderRow>()
+  if (!row) return jsonError('注文が見つかりません', 404, 'ORDER_NOT_FOUND')
+  const items = await memberItemsFor(env, [id])
+  return Response.json(mapMemberOrder(row, items.get(id) ?? []))
 }

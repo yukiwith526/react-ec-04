@@ -1,4 +1,4 @@
-import type { AdminCustomer, AdminOrder, AdminProduct, Category, Member, Product } from '../types'
+import type { AdminCustomer, AdminOrder, AdminProduct, Category, Member, MemberOrder, Product } from '../types'
 
 export class ApiError extends Error {
   status: number
@@ -76,6 +76,14 @@ export function loginMember(payload: { email: string; password: string }) {
 
 export function logoutMember() {
   return request<{ ok: boolean }>('/api/logout', { method: 'POST' })
+}
+
+export function fetchMyOrders() {
+  return request<MemberOrder[]>('/api/me/orders')
+}
+
+export function fetchMyOrder(id: string) {
+  return request<MemberOrder>(`/api/me/orders/${encodeURIComponent(id)}`)
 }
 
 export function updateMember(payload: { name: string; zip: string; address: string }) {

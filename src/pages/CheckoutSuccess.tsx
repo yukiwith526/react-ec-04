@@ -54,7 +54,7 @@ export function CheckoutSuccess() {
       {status === 'pending' && (
         <>
           <h1>支払いを確認しています</h1>
-          <p>反映まで少し時間がかかる場合があります。管理画面の注文一覧でも確認できます。</p>
+          <p>反映まで少し時間がかかる場合があります。マイページの注文履歴でも確認できます。</p>
         </>
       )}
       {status === 'canceled' && (
@@ -69,9 +69,16 @@ export function CheckoutSuccess() {
           <p className="muted">{error}</p>
         </>
       )}
-      <Link to="/shop" className="btn btn--teal">
-        ショップへ戻る
-      </Link>
+      <div className="checkout__done-actions">
+        {status === 'paid' && (
+          <Link to="/account" className="btn btn--teal">
+            注文履歴を見る
+          </Link>
+        )}
+        <Link to="/shop" className={status === 'paid' ? 'text-btn' : 'btn btn--teal'}>
+          ショップへ戻る
+        </Link>
+      </div>
     </section>
   )
 }

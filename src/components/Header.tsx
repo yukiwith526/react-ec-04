@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { categories } from '../data/storefront'
+import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import { useUi } from '../context/UiContext'
 import { IconBag, IconClose, IconMenu, IconSearch, IconUser } from './Icons'
@@ -20,6 +21,7 @@ export function AnnouncementBar() {
 }
 
 export function Header() {
+  const { member } = useAuth()
   const { itemCount } = useCart()
   const { openCart, openNav, openSearch } = useUi()
 
@@ -38,7 +40,7 @@ export function Header() {
           FLEUR LUMIÈRE
         </Link>
         <div className="header__right">
-          <Link to="/login" className="header__account" aria-label="会員登録 / ログイン">
+          <Link to={member ? '/account' : '/login'} className="header__account" aria-label={member ? 'マイページ' : '会員登録 / ログイン'}>
             <IconUser />
           </Link>
           <button type="button" className="bag-btn" aria-label="カート" onClick={openCart}>

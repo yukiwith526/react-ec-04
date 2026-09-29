@@ -25,9 +25,11 @@ import {
   createCheckoutSession,
   getAdminCustomer,
   getAdminOrder,
+  getMemberOrder,
   handleStripeWebhook,
   listAdminCustomers,
   listAdminOrders,
+  listMemberOrders,
 } from './orders'
 import type { Env } from './types'
 
@@ -122,6 +124,15 @@ export default {
 
     if (pathname === '/api/me' && request.method === 'PUT') {
       return updateMemberProfile(request, env)
+    }
+
+    if (pathname === '/api/me/orders' && request.method === 'GET') {
+      return listMemberOrders(request, env)
+    }
+
+    const memberOrder = pathname.match(/^\/api\/me\/orders\/([^/]+)$/)
+    if (memberOrder && request.method === 'GET') {
+      return getMemberOrder(request, env, decodeURIComponent(memberOrder[1]))
     }
 
     if (pathname === '/api/stripe/webhook' && request.method === 'POST') {
